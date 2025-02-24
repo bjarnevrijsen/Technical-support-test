@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from ...models import Vessel
+from django.db import transaction
 import threading
 
 
@@ -14,20 +15,19 @@ class Command(BaseCommand):
     def run_simulation(self):
         barrier = threading.Barrier(2)
 
-        def user1():
+        def user_withdraw():
             barrier.wait()
-            vessel = Vessel.objects.get(id=1)
-            vessel.content -= 10.0
-            vessel.save()
+            with transaction.atomic():
+                vessel = Vessel.objects.select_for_update().get(id=1)
+                if vessel.content >= 10.0:
+                    vessel.content -= 10.0
+                    vessel.save()
+                else:
+                  self.stdout.write("the vessel is empty and further withdrawals are not possible")
 
-        def user2():
-            barrier.wait()
-            vessel = Vessel.objects.get(id=1)
-            vessel.content -= 10.0
-            vessel.save()
 
-        t1 = threading.Thread(target=user1)
-        t2 = threading.Thread(target=user2)
+        t1 = threading.Thread(target=user_withdraw)
+        t2 = threading.Thread(target=user_withdraw)
         t1.start()
         t2.start()
         t1.join()
